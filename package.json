@@ -53,6 +53,19 @@
 				"path": "./syntaxes/dart.json"
 			}
 		],
+		"commands": [
+			{
+				"command": "dart.typeHierarchy",
+				"title": "Dart Type Hierarchy"
+			}
+		],
+		"keybindings": [
+			{
+				"command": "dart.typeHierarchy",
+				"key": "f4",
+				"when": "editorLangId == dart"
+			}
+		],
 		"configuration": {
 			"type": "object",
 			"title": "Dart Configuration",
