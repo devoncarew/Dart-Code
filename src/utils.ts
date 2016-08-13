@@ -2,8 +2,8 @@
 
 import * as path from "path";
 import * as fs from "fs";
+import * as vs from "vscode";
 import * as as from "./analysis/analysis_server_types";
-import { workspace, Position, Range, TextDocument } from "vscode";
 import { config } from "./config";
 
 export const dartVMPath = "bin/dart";
@@ -53,13 +53,13 @@ export interface Location {
 	length: number;
 }
 
-export function toPosition(location: Location): Position {
-	return new Position(location.startLine - 1, location.startColumn - 1);
+export function toPosition(location: Location): vs.Position {
+	return new vs.Position(location.startLine - 1, location.startColumn - 1);
 }
 
-export function toRange(location: Location): Range {
+export function toRange(location: Location): vs.Range {
 	let startPos = toPosition(location);
-	return new Range(startPos, startPos.translate(0, location.length));
+	return new vs.Range(startPos, startPos.translate(0, location.length));
 }
 
 export function getDartSdkVersion(sdkRoot: string): string {
@@ -71,7 +71,7 @@ export function getDartSdkVersion(sdkRoot: string): string {
 	}
 }
 
-export function isAnalyzable(document: TextDocument): boolean {
+export function isAnalyzable(document: vs.TextDocument): boolean {
 	if (document.isUntitled || !document.fileName)
 		return false;
 
@@ -85,11 +85,79 @@ export function isAnalyzable(document: TextDocument): boolean {
 		|| analyzableFilenames.indexOf(path.basename(document.fileName)) >= 0;
 }
 
-export function isWithinRootPath(document: TextDocument) {
+export function isWithinRootPath(document: vs.TextDocument) {
 	// asRelativePath returns the input if it's outside of the rootPath.
 	// Edit: Doesn't actually work properly:
 	//   https://github.com/Microsoft/vscode/issues/10446
 	//return workspace.asRelativePath(document.fileName) != document.fileName;
 
-	return workspace.rootPath != null && document.fileName.startsWith(workspace.rootPath + path.sep); 
+	return vs.workspace.rootPath != null && document.fileName.startsWith(vs.workspace.rootPath + path.sep); 
+}
+
+/**
+ * A class to parse the given text and convert between offset and line:col
+ * coordinates.
+ */
+export class TextDocumentImpl {
+	fileName: string;
+	text: string;
+	lineOffsets: Array<number>;
+
+	constructor(fileName: string, text: string) {
+		this.fileName = fileName;
+		this.text = text;
+	}
+
+	positionAt(offset: number): vs.Position {
+		offset = Math.max(Math.min(offset, this.text.length), 0);
+		let lineOffsets = this.getLineOffsets();
+		let low = 0, high = lineOffsets.length;
+		if (high === 0)
+			return new vs.Position(0, offset);
+		while (low < high) {
+			let mid = Math.floor((low + high) / 2);
+			if (lineOffsets[mid] > offset)
+				high = mid;
+			else
+				low = mid + 1;
+		}
+
+		let line = low - 1;
+		return new vs.Position(line, offset - lineOffsets[line]);
+	}
+
+	offsetAt(position: vs.Position): number {
+		let lineOffsets = this.getLineOffsets();
+		if (position.line >= lineOffsets.length)
+			return this.text.length;
+		else if (position.line < 0)
+			return 0;
+		let lineOffset = lineOffsets[position.line];
+		let nextLineOffset = (position.line + 1 < lineOffsets.length)
+			? lineOffsets[position.line + 1]
+			: this.text.length;
+		return Math.max(Math.min(lineOffset + position.character, nextLineOffset), lineOffset);
+	}
+
+	private getLineOffsets(): Array<number> {
+		if (this.lineOffsets == null) {
+			let lineOffsets = [];
+			let text = this.text;
+			let isLineStart = true;
+			for (let i = 0; i < text.length; i++) {
+				if (isLineStart) {
+					lineOffsets.push(i);
+					isLineStart = false;
+				}
+				let ch = text.charAt(i);
+				isLineStart = (ch === '\r' || ch === '\n');
+				if (ch === '\r' && i + 1 < text.length && text.charAt(i + 1) === '\n')
+					i++;
+			}
+			if (isLineStart && text.length > 0)
+				lineOffsets.push(text.length);
+			this.lineOffsets = lineOffsets;
+		}
+		return this.lineOffsets;
+	}
 }
