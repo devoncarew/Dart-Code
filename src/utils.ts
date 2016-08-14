@@ -75,7 +75,7 @@ export function isAnalyzable(document: vs.TextDocument): boolean {
 	if (document.isUntitled || !document.fileName)
 		return false;
 
-	if (!isWithinRootPath(document))
+	if (!isWithinRootPath(document.fileName))
 		return false;
 
 	const analyzableLanguages = ["dart", "html"];
@@ -85,13 +85,13 @@ export function isAnalyzable(document: vs.TextDocument): boolean {
 		|| analyzableFilenames.indexOf(path.basename(document.fileName)) >= 0;
 }
 
-export function isWithinRootPath(document: vs.TextDocument) {
+export function isWithinRootPath(file: string) {
 	// asRelativePath returns the input if it's outside of the rootPath.
 	// Edit: Doesn't actually work properly:
 	//   https://github.com/Microsoft/vscode/issues/10446
 	//return workspace.asRelativePath(document.fileName) != document.fileName;
 
-	return vs.workspace.rootPath != null && document.fileName.startsWith(vs.workspace.rootPath + path.sep); 
+	return vs.workspace.rootPath != null && file.startsWith(vs.workspace.rootPath + path.sep);
 }
 
 /**
